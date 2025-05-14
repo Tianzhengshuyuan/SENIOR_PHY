@@ -31,7 +31,8 @@ def extract_sentences_with_font_conditions(pdf_path, target_font, target_size):
 
     # 打开 PDF 文件
     with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
+        for number, page in enumerate(pdf.pages):
+            print(f"<<<<<<<<<<<<<<<<<<<<<< PAGE {number-4}>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")  # 打印当前处理的页码
             # 提取页面中的字符块
             chars = page.chars  # 获取页面中的每个字符及其字体信息
             if not chars:
@@ -47,7 +48,7 @@ def extract_sentences_with_font_conditions(pdf_path, target_font, target_size):
                 text = char.get("text", "")
                 font = char.get("fontname", "")
                 size = round(char.get("size", 0), 1)  # 舍入到 1 位小数
-
+                print(f"text is: {text}, font is: {font}, size is: {size}")  # 打印当前字符的信息
                 # 跳过空格字符
                 if text.strip() == "":
                     space = True
