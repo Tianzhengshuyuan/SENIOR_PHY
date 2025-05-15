@@ -8,10 +8,10 @@ CREATE TABLE knowledge_point (
     kp_id VARCHAR(20) PRIMARY KEY,
     subject_code VARCHAR(20),
     category1_code VARCHAR(20),
-    category2_code_code VARCHAR(20),
+    category2_code VARCHAR(20),
     code VARCHAR(50),
-    name VARCHAR(100),
-    description VARCHAR(255),
+    name VARCHAR(200),
+    description VARCHAR(200),
     parent_id VARCHAR(20)
 );
 

@@ -66,7 +66,36 @@ def check_sentence(sentence_text):
         not sentence_text.startswith("与此类似"):
         return True
 
+def standardize_sql(input_file, output_file):
 
+    with open(input_file, 'r', encoding='utf-8') as infile:
+        lines = infile.readlines()
+
+    # 用于存储标准化后的 SQL 行
+    standardized_lines = []
+
+    # 遍历每一行，查找并修复问题
+    for i, line in enumerate(lines):
+        line = line.rstrip()  # 去除行末的空白字符
+        if line == "" and i > 0 and i < len(lines) - 1:
+            # 如果当前行是空行，且下一行以 "INSERT" 开头
+            if lines[i + 1].strip().startswith("INSERT"):
+                # 修改空行前一行的结尾为分号
+                previous_line = standardized_lines[-1].rstrip(",")
+                standardized_lines[-1] = previous_line + ";\n"
+        else:
+            # 添加当前行到结果列表
+            standardized_lines.append(line)
+
+    # 确保最后一行以分号结尾
+    if not standardized_lines[-1].endswith(";"):
+        standardized_lines[-1] = standardized_lines[-1].rstrip(",") + ";\n"
+
+    # 将标准化后的内容写入输出文件
+    with open(output_file, 'w', encoding='utf-8') as outfile:
+        outfile.write("\n".join(standardized_lines) + "\n")
+
+    print(f"SQL 文件已标准化并保存到: {output_file}")
 
 def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
     """
@@ -171,7 +200,7 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                     f"INSERT INTO knowledge_point (kp_id, subject_code, category1_code, category2_code, code, name, description, parent_id) \n"
                     f"VALUES \n"
                     f"('{chapter_id}', 'PHYSICS', 'SENIOR', 'TERM_6', "
-                    f"'{chapter_code}', '{chapter['title']}', '', NULL);\n"
+                    f"'{chapter_code}', '{chapter['title']}', '', NULL),\n"
                 )
                 
                 for section_index, section in enumerate(chapter["sections"]):
@@ -180,7 +209,7 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                     section_code = f"{chapter_code}.SEC{str(section_index+1).zfill(2)}"
                     sql_file.write(
                         f"('{section_id}', 'PHYSICS', 'SENIOR', 'TERM_6', "
-                        f"'{section_code}', '{section['title']}', '', '{chapter_id}');\n"
+                        f"'{section_code}', '{section['title']}', '', '{chapter_id}'),\n"
                     )
                     
                     # 计算起始页和结束页
@@ -242,7 +271,7 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                 kp_code = f"{section_code}.KP{str(kp_index+1).zfill(2)}"
                                 sql_file.write(
                                     f"('{kp_id}', 'PHYSICS', 'SENIOR', 'TERM_6', "
-                                    f"'{kp_code}', '{current_knowledge_point['title']}', '', '{section_id}');\n"
+                                    f"'{kp_code}', '{current_knowledge_point['title']}', '', '{section_id}'),\n"
                                 )
                                 kp_index += 1  # 更新知识点索引
                                 op_index = 0  # 重置题目索引
@@ -320,7 +349,7 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                             op_code = f"{kp_code}.OP{str(op_index+1).zfill(2)}"
                                             sql_file.write(
                                                 f"('{op_id}', 'PHYSICS', 'SENIOR', 'TERM_6', "
-                                                f"'{op_code}', '{sentence_text}', '', '{kp_id}');\n"
+                                                f"'{op_code}', '{sentence_text}', '', '{kp_id}'),\n"
                                             )
                                             op_index += 1  # 更新知识点索引
                                             print(sentence_text)
@@ -338,3 +367,4 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
 pdf_path = "senior_optional_3.pdf"  # 替换为你的 PDF 文件路径
 output_sql_path = "so3.sql"
 extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path)
+standardize_sql(output_sql_path, output_sql_path)
