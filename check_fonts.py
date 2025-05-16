@@ -15,5 +15,5 @@ def extract_modules_by_fonts(pdf_path):
                 print(f"文字: {char['text']}, 字体: {char['fontname']}, 大小: {char['size']}")
                 
 # 示例使用
-pdf_path = "senior_optional_3.pdf"  # 替换为你的 PDF 文件路径
+pdf_path = "senior_physics_textbooks/senior_optional_1.pdf"  # 替换为你的 PDF 文件路径
 extract_modules_by_fonts(pdf_path)
