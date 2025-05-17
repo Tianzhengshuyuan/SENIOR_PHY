@@ -31,6 +31,7 @@ def check_sentence(sentence_text):
     # 检查关键词过滤条件
     if not re.search(r"你|我|他|它|图|这|编写|册|索引|例如|下表|表格|表1|表2|表3|[a-zA-Z]|？", sentence_text) and \
         not sentence_text.startswith("但") and \
+        not sentence_text.startswith("再") and \
         not sentence_text.startswith("可见") and \
         not sentence_text.startswith("所示") and \
         not sentence_text.startswith("于是") and \
@@ -53,7 +54,6 @@ def check_sentence(sentence_text):
         not sentence_text.startswith("原来") and \
         not sentence_text.startswith("所以") and \
         not sentence_text.startswith("不过") and \
-        not sentence_text.startswith("再如") and \
         not sentence_text.startswith("第一") and \
         not sentence_text.startswith("第二") and \
         not sentence_text.startswith("第三") and \
@@ -126,12 +126,18 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
     page_numbers = []
     remaining_lines = []
     start = False
+
     for line in catalog_lines:
         stripped_line = line.strip()
-        if stripped_line.isdigit():  # 判断是否为数字页码
-            page_numbers.append(int(stripped_line))
-        else:
-            remaining_lines.append(stripped_line)
+        if "目  录" in line:
+            start = True
+            continue
+        if start:
+            if stripped_line.isdigit():  # 判断是否为数字页码
+                page_numbers.append(int(stripped_line))
+            else:
+                remaining_lines.append(stripped_line)
+    print(page_numbers)
 
     # Step 2: 解析章节和小节标题
     chapters = []
@@ -192,7 +198,7 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
         with pdfplumber.open(pdf_path) as pdf:
             for chapter_index, chapter in enumerate(chapters):
                 # 插入章信息到 SQL文件
-                chapter_id = f"010101{str(chapter_index+1).zfill(2)}000000"
+                chapter_id = f"010106{str(chapter_index+1).zfill(2)}000000"
                 chapter_code = f"CH{str(chapter_index+1).zfill(2)}"
                 sql_file.write("\n")
                 sql_file.write(
@@ -204,7 +210,7 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                 
                 for section_index, section in enumerate(chapter["sections"]):
                     # 插入节信息到 SQL文件
-                    section_id = f"010101{str(chapter_index+1).zfill(2)}{str(section_index+1).zfill(2)}0000"
+                    section_id = f"010106{str(chapter_index+1).zfill(2)}{str(section_index+1).zfill(2)}0000"
                     section_code = f"{chapter_code}.SEC{str(section_index+1).zfill(2)}"
                     sql_file.write(
                         f"('{section_id}', 'PHYSICS', 'SENIOR', 'TERM_6', "
@@ -266,7 +272,7 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                 print(f"知识点标题: {current_knowledge_point['title']}")  # 打印知识点标题
                                 
                                 # 插入知识点信息到 SQL文件
-                                kp_id = f"010101{str(chapter_index+1).zfill(2)}{str(section_index+1).zfill(2)}{str(kp_index+1).zfill(2)}00"
+                                kp_id = f"010106{str(chapter_index+1).zfill(2)}{str(section_index+1).zfill(2)}{str(kp_index+1).zfill(2)}00"
                                 kp_code = f"{section_code}.KP{str(kp_index+1).zfill(2)}"
                                 sql_file.write(
                                     f"('{kp_id}', 'PHYSICS', 'SENIOR', 'TERM_6', "
@@ -344,7 +350,7 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                         if check_sentence(sentence_text):
                                             filtered_sentences.append(sentence_text)
                                             # 插入选项信息到 SQL文件
-                                            op_id = f"010101{str(chapter_index+1).zfill(2)}{str(section_index+1).zfill(2)}{str(kp_index+1).zfill(2)}{str(op_index+1).zfill(2)}"
+                                            op_id = f"010106{str(chapter_index+1).zfill(2)}{str(section_index+1).zfill(2)}{str(kp_index+1).zfill(2)}{str(op_index+1).zfill(2)}"
                                             op_code = f"{kp_code}.OP{str(op_index+1).zfill(2)}"
                                             sql_file.write(
                                                 f"('{op_id}', 'PHYSICS', 'SENIOR', 'TERM_6', "

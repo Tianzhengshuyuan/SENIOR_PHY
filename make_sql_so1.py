@@ -31,6 +31,7 @@ def check_sentence(sentence_text):
     # 检查关键词过滤条件
     if not re.search(r"你|我|他|它|图|这|编写|册|索引|例如|下表|表格|表1|表2|表3|[a-zA-Z]|？", sentence_text) and \
         not sentence_text.startswith("但") and \
+        not sentence_text.startswith("再") and \
         not sentence_text.startswith("可见") and \
         not sentence_text.startswith("所示") and \
         not sentence_text.startswith("于是") and \
@@ -53,7 +54,6 @@ def check_sentence(sentence_text):
         not sentence_text.startswith("原来") and \
         not sentence_text.startswith("所以") and \
         not sentence_text.startswith("不过") and \
-        not sentence_text.startswith("再如") and \
         not sentence_text.startswith("第一") and \
         not sentence_text.startswith("第二") and \
         not sentence_text.startswith("第三") and \
@@ -128,10 +128,13 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
     start = False
     for line in catalog_lines:
         stripped_line = line.strip()
-        if stripped_line.isdigit():  # 判断是否为数字页码
+        if "目  录" in line:
+            start = True
+        if stripped_line.isdigit() and not stripped_line.startswith("0"):  # 判断是否为数字页码
             page_numbers.append(int(stripped_line))
         else:
-            remaining_lines.append(stripped_line)
+            if start == True:
+                remaining_lines.append(stripped_line)
 
     # Step 2: 解析章节和小节标题
     chapters = []
@@ -192,22 +195,22 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
         with pdfplumber.open(pdf_path) as pdf:
             for chapter_index, chapter in enumerate(chapters):
                 # 插入章信息到 SQL文件
-                chapter_id = f"010101{str(chapter_index+1).zfill(2)}000000"
+                chapter_id = f"010104{str(chapter_index+1).zfill(2)}000000"
                 chapter_code = f"CH{str(chapter_index+1).zfill(2)}"
                 sql_file.write("\n")
                 sql_file.write(
                     f"INSERT INTO knowledge_point (kp_id, subject_code, category1_code, category2_code, code, name, description, parent_id) \n"
                     f"VALUES \n"
-                    f"('{chapter_id}', 'PHYSICS', 'SENIOR', 'TERM_6', "
+                    f"('{chapter_id}', 'PHYSICS', 'SENIOR', 'TERM_4', "
                     f"'{chapter_code}', '{chapter['title']}', '', NULL),\n"
                 )
                 
                 for section_index, section in enumerate(chapter["sections"]):
                     # 插入节信息到 SQL文件
-                    section_id = f"010101{str(chapter_index+1).zfill(2)}{str(section_index+1).zfill(2)}0000"
+                    section_id = f"010104{str(chapter_index+1).zfill(2)}{str(section_index+1).zfill(2)}0000"
                     section_code = f"{chapter_code}.SEC{str(section_index+1).zfill(2)}"
                     sql_file.write(
-                        f"('{section_id}', 'PHYSICS', 'SENIOR', 'TERM_6', "
+                        f"('{section_id}', 'PHYSICS', 'SENIOR', 'TERM_4', "
                         f"'{section_code}', '{section['title']}', '', '{chapter_id}'),\n"
                     )
                     
@@ -240,7 +243,7 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                             char = current_page.chars[char_index]
                             
                             # 检查字体和大小是否符合知识点标题的条件
-                            if char.get("fontname") == "XNKZPT+FZLTZHK--GBK1-0" and round(char.get("size")) == 14 and char.get("text") != "问" and char.get("text") != "题":
+                            if char.get("fontname") == "JLMIVV+FZLTZHK--GBK1-0" and round(char.get("size")) == 14 and char.get("text") != "问" and char.get("text") != "题":
                                 # 如果当前有未结束的知识点标题，保存到知识点列表
                                 if current_knowledge_point:
                                     knowledge_points.append(current_knowledge_point)
@@ -251,7 +254,7 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                 for next_char_index in range(char_index + 1, len(current_page.chars)):
                                     next_char = current_page.chars[next_char_index]
                                     # 如果字体和大小与知识点标题一致，则继续拼接标题
-                                    if next_char.get("fontname") == "XNKZPT+FZLTZHK--GBK1-0" and round(next_char.get("size")) == 14:
+                                    if next_char.get("fontname") == "JLMIVV+FZLTZHK--GBK1-0" and round(next_char.get("size")) == 14:
                                         kp_title += next_char["text"]
                                         last_scanned_index = next_char_index  # 更新最后扫描的索引
                                     else:
@@ -266,10 +269,10 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                 print(f"知识点标题: {current_knowledge_point['title']}")  # 打印知识点标题
                                 
                                 # 插入知识点信息到 SQL文件
-                                kp_id = f"010101{str(chapter_index+1).zfill(2)}{str(section_index+1).zfill(2)}{str(kp_index+1).zfill(2)}00"
+                                kp_id = f"010104{str(chapter_index+1).zfill(2)}{str(section_index+1).zfill(2)}{str(kp_index+1).zfill(2)}00"
                                 kp_code = f"{section_code}.KP{str(kp_index+1).zfill(2)}"
                                 sql_file.write(
-                                    f"('{kp_id}', 'PHYSICS', 'SENIOR', 'TERM_6', "
+                                    f"('{kp_id}', 'PHYSICS', 'SENIOR', 'TERM_4', "
                                     f"'{kp_code}', '{current_knowledge_point['title']}', '', '{section_id}'),\n"
                                 )
                                 kp_index += 1  # 更新知识点索引
@@ -277,7 +280,7 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                 
                                 # 更新外层循环的索引，跳过已扫描的字符
                                 char_index = last_scanned_index
-                                previous_font = "XNKZPT+FZLTZHK--GBK1-0"
+                                previous_font = "JLMIVV+FZLTZHK--GBK1-0"
                                 previous_size = 14
                             # 检查知识点中的正文，是否符合条件
                             elif current_knowledge_point:
@@ -337,17 +340,17 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                 # print("text is: "+text,"current_sentence is: "+str(current_sentence))
                                 # 如果遇到句子结束符，结束当前句子
                                 if text in "。！？":
-                                    proportion = calculate_font_proportion(current_sentence, "GSQGML+FZSSK--GBK1-0", 12)
+                                    proportion = calculate_font_proportion(current_sentence, "NPOWTX+FZSSK--GBK1-0", 12)
                                     # print("proportion is "+str(proportion))
                                     if proportion >= 0.8:  # 字体比例需超过 80%
                                         sentence_text = "".join([c[0] for c in current_sentence])
                                         if check_sentence(sentence_text):
                                             filtered_sentences.append(sentence_text)
                                             # 插入选项信息到 SQL文件
-                                            op_id = f"010101{str(chapter_index+1).zfill(2)}{str(section_index+1).zfill(2)}{str(kp_index+1).zfill(2)}{str(op_index+1).zfill(2)}"
+                                            op_id = f"010104{str(chapter_index+1).zfill(2)}{str(section_index+1).zfill(2)}{str(kp_index+1).zfill(2)}{str(op_index+1).zfill(2)}"
                                             op_code = f"{kp_code}.OP{str(op_index+1).zfill(2)}"
                                             sql_file.write(
-                                                f"('{op_id}', 'PHYSICS', 'SENIOR', 'TERM_6', "
+                                                f"('{op_id}', 'PHYSICS', 'SENIOR', 'TERM_4', "
                                                 f"'{op_code}', '{sentence_text}', '', '{kp_id}'),\n"
                                             )
                                             op_index += 1  # 更新知识点索引
