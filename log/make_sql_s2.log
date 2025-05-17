@@ -274,4 +274,4 @@
 知识点标题: 参考选题
 的动作习惯是通过有效经验的积累形成的，其中隐藏着许多物理原理。
 [{'title': '实验思路', 'options': []}, {'title': '物理量的测量', 'options': []}, {'title': '数据分析', 'options': []}, {'title': '研究样例', 'options': []}, {'title': '参考选题', 'options': []}]
-SQL 文件已标准化并保存到: sql/s2.sql
+SQL 文件已标准化并保存到: sql/phy_senior.sql

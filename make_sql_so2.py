@@ -68,38 +68,6 @@ def check_sentence(sentence_text):
         not sentence_text.startswith("实验结果") and \
         not sentence_text.startswith("与此类似"):
         return True
-
-def standardize_sql(input_file, output_file):
-
-    with open(input_file, 'r', encoding='utf-8') as infile:
-        lines = infile.readlines()
-
-    # 用于存储标准化后的 SQL 行
-    standardized_lines = []
-
-    # 遍历每一行，查找并修复问题
-    for i, line in enumerate(lines):
-        line = line.rstrip()  # 去除行末的空白字符
-        if line == "" and i > 0 and i < len(lines) - 1:
-            # 如果当前行是空行，且下一行以 "INSERT" 开头
-            if lines[i + 1].strip().startswith("INSERT"):
-                # 修改空行前一行的结尾为分号
-                previous_line = standardized_lines[-1].rstrip(",")
-                standardized_lines[-1] = previous_line + ";\n"
-        else:
-            # 添加当前行到结果列表
-            standardized_lines.append(line)
-
-    # 确保最后一行以分号结尾
-    if not standardized_lines[-1].endswith(";"):
-        standardized_lines[-1] = standardized_lines[-1].rstrip(",") + ";\n"
-
-    # 将标准化后的内容写入输出文件
-    with open(output_file, 'w', encoding='utf-8') as outfile:
-        outfile.write("\n".join(standardized_lines) + "\n")
-
-    print(f"SQL 文件已标准化并保存到: {output_file}")
-
 def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
     """
     从 PDF 文件中提取目录页信息，包括章节标题、小节标题及其对应页码，并生成 SQL 插入语句。
@@ -176,18 +144,9 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
         print(f"章节: {chapter['title']} (起始页: {chapter['page']})")
         for section in chapter["sections"]:
             print(f"  小节: {section['title']} (页码: {section['page']})")
-
-    # Step 4: 生成 SQL 初始化语句
-    # 读取 start.sql 文件内容
-    with open("sql/start.sql", "r", encoding="utf-8") as start_file:
-        start_sql_content = start_file.read()
         
-    with open(output_sql_path, "w", encoding="utf-8") as sql_file:
-        # 写入 start.sql 文件的内容
-        sql_file.write(start_sql_content)
-        sql_file.write("\n")
-                      
-        # Step 5: 解析 PDF 字符内容
+    with open(output_sql_path, "a", encoding="utf-8") as sql_file:                      
+        # Step 4: 解析 PDF 字符内容
         filtered_sentences = []
         with pdfplumber.open(pdf_path) as pdf:
             for chapter_index, chapter in enumerate(chapters):
@@ -364,6 +323,5 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
 
 # 示例用法
 pdf_path = "senior_physics_textbooks/senior_optional_2.pdf"  # 替换为你的 PDF 文件路径
-output_sql_path = "sql/so2.sql"
+output_sql_path = "sql/phy_senior.sql"
 extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path)
-standardize_sql(output_sql_path, output_sql_path)

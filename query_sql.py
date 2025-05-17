@@ -199,7 +199,7 @@ def connect_db():
         host="localhost",     # 数据库地址（自行修改）
         user="root",          # 数据库用户名（自行修改）
         password="",          # 数据库密码（自行修改）
-        database="phy_senior3"  # 数据库名称
+        database="phy_senior"  # 数据库名称
     )
 
 def get_options(cursor, parent_id):

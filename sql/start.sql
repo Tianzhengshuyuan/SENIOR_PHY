@@ -1,5 +1,5 @@
-CREATE DATABASE IF NOT EXISTS phy_senior3;
-USE phy_senior3;
+CREATE DATABASE IF NOT EXISTS phy_senior;
+USE phy_senior;
 
 DROP TABLE IF EXISTS knowledge_relation;
 DROP TABLE IF EXISTS knowledge_point;
