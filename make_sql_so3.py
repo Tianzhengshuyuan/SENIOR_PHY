@@ -2,6 +2,17 @@ import re
 import fitz  # PyMuPDF
 import pdfplumber
 
+TITLE_FONT = "XNKZPT+FZLTZHK--GBK1-0"
+TITLE_SIZE = 14
+BODY_FONT = "GSQGML+FZSSK--GBK1-0"
+BODY_SIZE = 12
+PAGE_FONT = "SPHFXD+FZZDXJW--GB1-0"
+TERM_FONT = "XNKZPT+FZLTZHK--GBK1-0"
+TERM_SIZE = 12
+BRACKET_FONT = "GSQGML+FZSSK--GBK1-0"
+BRACKET_SIZE = 12
+PARA_FONT = "SQAQXD+FZKTK--GBK1-0"
+
 def is_chinese(char):
     """判断一个字符是否是汉字"""
     return '\u4e00' <= char <= '\u9fff'
@@ -11,17 +22,34 @@ def save_text(sentence):
     sentence_text = "".join([c[0] for c in sentence])
     with open("texts.txt", "a", encoding="utf-8") as f:
         f.write(sentence_text + "\n")
-def calculate_font_proportion(sentence, target_font, target_size):
-    """
-    计算句子中满足指定字体和字号的字符比例
-    :param sentence: 当前句子（包含字符、字体和字号的列表）
-    :param target_font: 目标字体
-    :param target_size: 目标字号
-    :return: 满足条件的字符比例（0~1）
-    """
+def calculate_font_proportion(sentence):
     if not sentence:
         return 0
-    matching_count = sum(1 for char, font, size in sentence if font == target_font and size == target_size)
+
+    matching_count = 0
+    i = 0
+  
+    while i < len(sentence):
+        char, font, size = sentence[i]
+
+        # 查看是否是普通正文字体
+        if font == BODY_FONT and size == BODY_SIZE:
+            matching_count += 1
+
+        # 查看是否是定义概念时使用的字体
+        elif font == TERM_FONT and size == TERM_SIZE:
+            start = i
+            while i < len(sentence) and sentence[i][1] == TERM_FONT and sentence[i][2] == TERM_SIZE:
+                i += 1
+            if i < len(sentence) and sentence[i][0] == "（" and sentence[i][1] == BRACKET_FONT and sentence[i][2] == BRACKET_SIZE:
+                while i < len(sentence) and sentence[i][0] != "）":
+                    i += 1
+                matching_count += (i + 1 - start)
+
+        # Move to the next character
+        i += 1
+
+    # Calculate the proportion
     return matching_count / len(sentence)
 
 def check_sentence(sentence_text):
@@ -34,45 +62,9 @@ def check_sentence(sentence_text):
         return False
     
     # 检查关键词过滤条件
-    if not re.search(r"你|我|他|它|图|这|编写|册|索引|例如|下表|表格|表1|表2|表3|[a-zA-Z]|？", sentence_text) and \
-        not sentence_text.startswith("但") and \
-        not sentence_text.startswith("再") and \
-        not sentence_text.startswith("可见") and \
-        not sentence_text.startswith("所示") and \
-        not sentence_text.startswith("于是") and \
-        not sentence_text.startswith("当时") and \
-        not sentence_text.startswith("此时") and \
-        not sentence_text.startswith("从此") and \
-        not sentence_text.startswith("后来") and \
-        not sentence_text.startswith("以后") and \
-        not sentence_text.startswith("因此") and \
-        not sentence_text.startswith("为此") and \
-        not sentence_text.startswith("当然") and \
-        not sentence_text.startswith("然而") and \
-        not sentence_text.startswith("另外") and \
-        not sentence_text.startswith("反之") and \
-        not sentence_text.startswith("此外") and \
-        not sentence_text.startswith("此后") and \
-        not sentence_text.startswith("前面") and \
-        not sentence_text.startswith("上面") and \
-        not sentence_text.startswith("上述") and \
-        not sentence_text.startswith("原来") and \
-        not sentence_text.startswith("所以") and \
-        not sentence_text.startswith("不过") and \
-        not sentence_text.startswith("第一") and \
-        not sentence_text.startswith("第二") and \
-        not sentence_text.startswith("第三") and \
-        not sentence_text.startswith("如此") and \
-        not sentence_text.startswith("可是") and \
-        not sentence_text.startswith("一方面") and \
-        not sentence_text.startswith("类似地") and \
-        not sentence_text.startswith("由此可") and \
-        not sentence_text.startswith("也就是说") and \
-        not sentence_text.startswith("换句话说") and \
-        not sentence_text.startswith("另一方面") and \
-        not sentence_text.startswith("实验结果") and \
-        not sentence_text.startswith("与此类似"):
+    if not re.search(r"图|编写|册|索引|下表|表格|表1|表2|表3|？", sentence_text):
         return True
+    
 def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
     """
     从 PDF 文件中提取目录页信息，包括章节标题、小节标题及其对应页码，并生成 SQL 插入语句。
@@ -110,7 +102,7 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                 page_numbers.append(int(stripped_line))
             else:
                 remaining_lines.append(stripped_line)
-    print(page_numbers)
+    # print(page_numbers)
 
     # Step 2: 解析章节和小节标题
     chapters = []
@@ -158,7 +150,6 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
 
     with open(output_sql_path, "a", encoding="utf-8") as sql_file:           
         # Step 4: 解析 PDF 字符内容
-        filtered_sentences = []
         with pdfplumber.open(pdf_path) as pdf:
             for chapter_index, chapter in enumerate(chapters):
                 # 插入章信息到 SQL文件
@@ -190,12 +181,11 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                     else:
                         end_page = chapter["sections"][section_index + 1]["page"] - 1 + 4
 
-                    print(f"\n解析小节: {section['title']} (起始页: {start_page}, 结束页: {end_page})")
+                    # print(f"\n解析小节: {section['title']} (起始页: {start_page}, 结束页: {end_page})")
                     
                     knowledge_points = []
                     current_knowledge_point = None
                     kp_index = 0
-                    q_index = 0
                     for page_number in range(start_page, end_page + 1):
                         current_page = pdf.pages[page_number]
                         char_index = 0
@@ -210,7 +200,7 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                             char = current_page.chars[char_index]
                             
                             # 检查字体和大小是否符合知识点标题的条件
-                            if char.get("fontname") == "XNKZPT+FZLTZHK--GBK1-0" and round(char.get("size")) == 14 and char.get("text") != "问" and char.get("text") != "题":
+                            if char.get("fontname") == TITLE_FONT and round(char.get("size")) == 14 and char.get("text") != "问" and char.get("text") != "题" and char.get("text").strip() != "":
                                 # 如果当前有未结束的知识点标题，保存到知识点列表
                                 if current_knowledge_point:
                                     knowledge_points.append(current_knowledge_point)
@@ -221,7 +211,7 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                 for next_char_index in range(char_index + 1, len(current_page.chars)):
                                     next_char = current_page.chars[next_char_index]
                                     # 如果字体和大小与知识点标题一致，则继续拼接标题
-                                    if next_char.get("fontname") == "XNKZPT+FZLTZHK--GBK1-0" and round(next_char.get("size")) == 14:
+                                    if next_char.get("fontname") == TITLE_FONT and round(next_char.get("size")) == 14:
                                         kp_title += next_char["text"]
                                         last_scanned_index = next_char_index  # 更新最后扫描的索引
                                     else:
@@ -233,7 +223,7 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                     "title": kp_title.strip(),  # 去除多余空格
                                     "options": []
                                 }
-                                print(f"知识点标题: {current_knowledge_point['title']}")  # 打印知识点标题
+                                # print(f"知识点标题: {current_knowledge_point['title']}")  # 打印知识点标题
                                 
                                 # 插入知识点信息到 SQL文件
                                 kp_id = f"010106{str(chapter_index+1).zfill(2)}{str(section_index+1).zfill(2)}{str(kp_index+1).zfill(2)}00"
@@ -247,8 +237,10 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                 
                                 # 更新外层循环的索引，跳过已扫描的字符
                                 char_index = last_scanned_index
-                                previous_font = "XNKZPT+FZLTZHK--GBK1-0"
+                                previous_font = TITLE_FONT
                                 previous_size = 14
+                                space = False
+                                
                             # 检查知识点中的正文，是否符合条件
                             elif current_knowledge_point:
                                 text = char.get("text", "")
@@ -263,17 +255,27 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                     continue
 
                                 # 判断是否需要分割句子
+                                # 先考虑空格隔开两端字体不同的文本的情况
                                 if (
                                     previous_font is not None
                                     and previous_size is not None
                                     and (font != previous_font or size != previous_size)  # 检测字体或字号变化
                                     and space == True
                                 ):
-                                    # print(current_sentence)
-                                    # print("1")
-                                    # 检查前后都是汉字的情况
-                                    if current_sentence and is_chinese(current_sentence[-1][0]):
-                                        # 如果字体变化且后面是汉字，分割句子并保留后半部分
+                                    font_right = False
+                                    for i in range(char_index, len(current_page.chars)):
+                                        check_char = current_page.chars[i]
+                                        check_text = check_char.get("text", "")
+                                        # 检查是否是中文字符
+                                        if is_chinese(check_text):
+                                            check_font = check_char.get("fontname", "")
+                                            if check_font == BODY_FONT:
+                                                font_right = True   
+                                                break
+                                                
+                                    # 如果字体变化且前面是汉字，分割句子并保留后半部分
+                                    if current_sentence and font_right and ((is_chinese(current_sentence[-1][0]) and current_sentence[-1][1] == PARA_FONT)  or current_sentence[-1][1] == PAGE_FONT):
+                                        # print("current_sentence[-1][0] is: "+current_sentence[-1][0])
                                         current_sentence = [(text, font, size)]
                                         previous_font = font
                                         previous_size = size
@@ -284,11 +286,26 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                 elif (
                                     previous_font is not None
                                     and previous_size is not None
+                                    and (previous_font == TITLE_FONT and previous_size == TITLE_SIZE)  # 检测字体或字号变化
+                                    and (font == BODY_FONT and size == BODY_SIZE)
+                                    and not current_knowledge_point["options"]
+                                ):
+                                    current_sentence = [(text, font, size)]
+                                    previous_font = font
+                                    previous_size = size
+                                    space = False  # 重置空格标志
+                                    char_index += 1
+                                    continue
+                                elif (
+                                    previous_font is not None
+                                    and previous_size is not None
                                     and (font != previous_font or size != previous_size)  # 检测字体或字号变化
-                                    and font == "GSQGML+FZSSK--GBK1-0"
+                                    and font == BODY_FONT
                                     and space == False
                                 ):
-                                    # print("2")
+                                    # print("find font change: "+text)
+                                    # print("current_sentence is: ",end=" ")
+                                    # print(current_sentence)
                                     if current_sentence and is_chinese(text) and is_chinese(current_sentence[-1][0]):
                                         # 如果字体变化且前后都是汉字，分割句子并保留后半部分
                                         current_sentence = [(text, font, size)]
@@ -298,24 +315,25 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                         # print("situation2——text is: "+text)
                                         char_index += 1
                                         continue
-
+                                
                                 # 添加当前字符到当前句子
                                 current_sentence.append((text, font, size))
-                                # print(current_sentence)
-                                # print(text, font, size)
                                 previous_font = font
                                 previous_size = size
                                 # print("text is: "+text,"current_sentence is: "+str(current_sentence))
                                 # 如果遇到句子结束符，结束当前句子
                                 if text in "。！？":
-                                    proportion = calculate_font_proportion(current_sentence, "GSQGML+FZSSK--GBK1-0", 12)
+                                    proportion = calculate_font_proportion(current_sentence)
+                                    st = "".join([c[0] for c in current_sentence])  
+                                    # print("sentence is: "+st)
                                     # print("proportion is "+str(proportion))
                                     if proportion >= 0.6:
                                         sentence_text = "".join([c[0] for c in current_sentence])
+                                        print("length of sentence is: "+str(len(sentence_text)))
                                         save_text(current_sentence)  # 保存当前句子到文件
                                         
                                         if check_sentence(sentence_text):
-                                            filtered_sentences.append(sentence_text)
+                                            current_knowledge_point["options"].append(sentence_text)  # 添加到知识点选项列表
                                             # 插入选项信息到 SQL文件
                                             op_id = f"010106{str(chapter_index+1).zfill(2)}{str(section_index+1).zfill(2)}{str(kp_index+1).zfill(2)}{str(op_index+1).zfill(2)}"
                                             op_code = f"{kp_code}.OP{str(op_index+1).zfill(2)}"
@@ -324,7 +342,7 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                                 f"'{op_code}', '{sentence_text}', '', '{kp_id}'),\n"
                                             )
                                             op_index += 1  # 更新知识点索引
-                                            print(sentence_text)
+                                            # print(sentence_text)
                                         
                                     current_sentence = []
                                 space = False  # 重置空格标志

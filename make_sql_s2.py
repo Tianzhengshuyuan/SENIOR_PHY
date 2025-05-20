@@ -190,7 +190,6 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                     knowledge_points = []
                     current_knowledge_point = None
                     kp_index = 0
-                    q_index = 0
                     for page_number in range(start_page, end_page + 1):
                         current_page = pdf.pages[page_number]
                         char_index = 0
