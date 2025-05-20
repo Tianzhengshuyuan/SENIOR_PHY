@@ -1,6 +1,10 @@
 import re
 import fitz  # PyMuPDF
 import pdfplumber
+from openai import OpenAI
+
+# 配置 DeepSeek API 客户端
+client = OpenAI(api_key="sk-09da13b2c97948628523d042d6a02f06", base_url="https://api.deepseek.com")
 
 TITLE_FONT = "XNKZPT+FZLTZHK--GBK1-0"
 TITLE_SIZE = 14
@@ -22,6 +26,58 @@ def save_text(sentence):
     sentence_text = "".join([c[0] for c in sentence])
     with open("texts.txt", "a", encoding="utf-8") as f:
         f.write(sentence_text + "\n")
+        
+def call_deepseek_api(question):
+    """
+    调用 DeepSeek API 并获取答案。
+    :param question: 需要发送到 API 的完整问题
+    :return: API 返回的答案
+    """
+    try:
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": question},
+            ],
+            stream=False
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"调用 DeepSeek API 时出错: {e}")
+        return "API 调用失败"
+    
+def gen_multi_sentence(knowledge_point, sql_file):
+    chapter_index = knowledge_point['chaptor_index']
+    section_index = knowledge_point['section_index']
+    kp_index = knowledge_point['kp_index']
+    kp_id = knowledge_point['kp_id']
+    kp_code = knowledge_point['kp_code']
+    
+    full_text = '\n'.join(knowledge_point['options'])
+        
+    prompt = "对于下面的文本，每一行是一个句子，有的句子表达的意思是完整的，有的句子是不完整的，需要和它前面或后面的一个或多个句子连接在一起，才能表达完整的意思。比如一个句子中有“例如”、“这表明”、“再如”、“可见”、“因此”等关键词，则大概率要和前面的句子连接到一起。有的句子语法有问题、逻辑怪异，比如，“第一章分子动理论3家用扫描隧道显微镜拍摄的石墨表面的原子”，这种句子直接跳过不考虑。请帮我整理文本，连接相邻的句子成一个段落，以表达完整意思。段落要描述物理学中的规律或事实，比如“下面我们做一个类似的实验。”就不属于描述物理规律和事实。连续的句子只要能表达完整意思就划分为段落，段落里包含的句子尽可能少。每一完整段落前面加上从“1. ”开始的序号。文本如下：\n"
+    send_text = prompt + full_text
+    response = call_deepseek_api(send_text)
+    print("response is: "+response)
+    # 使用正则表达式匹配并去除编号
+    result_lines = []
+    for line in response.split('\n'):
+        line = line.strip()
+        m = re.match(r'^(\d+)\.\s+(.*)', line)
+        if m:
+            content = m.group(2)
+            result_lines.append(content)
+
+    for op_index, sentence_text in enumerate(result_lines):
+        # 插入选项信息到 SQL文件
+        op_id = f"010106{str(chapter_index+1).zfill(2)}{str(section_index+1).zfill(2)}{str(kp_index+1).zfill(2)}{str(op_index+1).zfill(2)}"
+        op_code = f"{kp_code}.OP{str(op_index+1).zfill(2)}"
+        sql_file.write(
+            f"('{op_id}', 'PHYSICS', 'SENIOR', 'TERM_6', "
+            f"'{op_code}', '{sentence_text}', '', '{kp_id}'),\n"
+        )
+        # print(sentence_text)
 def calculate_font_proportion(sentence):
     if not sentence:
         return 0
@@ -204,6 +260,7 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                 # 如果当前有未结束的知识点标题，保存到知识点列表
                                 if current_knowledge_point:
                                     knowledge_points.append(current_knowledge_point)
+                                    gen_multi_sentence(current_knowledge_point, sql_file)
 
                                 # 开始扫描完整的知识点标题
                                 kp_title = char["text"]  # 初始化知识点标题
@@ -218,20 +275,25 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                         # 字体或大小不一致时，结束扫描
                                         break
 
-                                # 创建章节标题的字典
-                                current_knowledge_point = {
-                                    "title": kp_title.strip(),  # 去除多余空格
-                                    "options": []
-                                }
-                                # print(f"知识点标题: {current_knowledge_point['title']}")  # 打印知识点标题
-                                
                                 # 插入知识点信息到 SQL文件
                                 kp_id = f"010106{str(chapter_index+1).zfill(2)}{str(section_index+1).zfill(2)}{str(kp_index+1).zfill(2)}00"
                                 kp_code = f"{section_code}.KP{str(kp_index+1).zfill(2)}"
                                 sql_file.write(
                                     f"('{kp_id}', 'PHYSICS', 'SENIOR', 'TERM_6', "
-                                    f"'{kp_code}', '{current_knowledge_point['title']}', '', '{section_id}'),\n"
+                                    f"'{kp_code}', '{kp_title.strip()}', '', '{section_id}'),\n"
                                 )
+                                
+                                # 创建章节标题的字典
+                                current_knowledge_point = {
+                                    "title": kp_title.strip(),  # 去除多余空格
+                                    "options": [],
+                                    "chaptor_index": chapter_index,
+                                    "section_index": section_index,
+                                    "kp_index": kp_index,
+                                    "kp_id": kp_id,
+                                    "kp_code": kp_code,
+                                }
+                                
                                 kp_index += 1  # 更新知识点索引
                                 op_index = 0  # 重置题目索引
                                 
@@ -332,17 +394,8 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                         print("length of sentence is: "+str(len(sentence_text)))
                                         save_text(current_sentence)  # 保存当前句子到文件
                                         
-                                        if check_sentence(sentence_text):
-                                            current_knowledge_point["options"].append(sentence_text)  # 添加到知识点选项列表
-                                            # 插入选项信息到 SQL文件
-                                            op_id = f"010106{str(chapter_index+1).zfill(2)}{str(section_index+1).zfill(2)}{str(kp_index+1).zfill(2)}{str(op_index+1).zfill(2)}"
-                                            op_code = f"{kp_code}.OP{str(op_index+1).zfill(2)}"
-                                            sql_file.write(
-                                                f"('{op_id}', 'PHYSICS', 'SENIOR', 'TERM_6', "
-                                                f"'{op_code}', '{sentence_text}', '', '{kp_id}'),\n"
-                                            )
-                                            op_index += 1  # 更新知识点索引
-                                            # print(sentence_text)
+                                        # if check_sentence(sentence_text):
+                                        current_knowledge_point["options"].append(sentence_text)  # 添加到知识点选项列表
                                         
                                     current_sentence = []
                                 space = False  # 重置空格标志
@@ -351,6 +404,8 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                         # 添加最后一个章节（如果有）
                     if current_knowledge_point:
                         knowledge_points.append(current_knowledge_point)
+                        gen_multi_sentence(current_knowledge_point, sql_file)
+                        
                     print(knowledge_points)
 
 # 示例用法
