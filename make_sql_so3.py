@@ -1,10 +1,19 @@
 import re
 import fitz  # PyMuPDF
 import pdfplumber
+import os
+import openai
+import argparse
 from openai import OpenAI
+from mistralai import Mistral
+from volcenginesdkarkruntime import Ark
+
 
 # 配置 DeepSeek API 客户端
-client = OpenAI(api_key="sk-09da13b2c97948628523d042d6a02f06", base_url="https://api.deepseek.com")
+deepseek_client = OpenAI(api_key="sk-09da13b2c97948628523d042d6a02f06", base_url="https://api.deepseek.com")
+kimi_client = OpenAI(api_key="sk-ODuizMlUC22phanBhvYz6dBjx2yrz7vhKhcjKnoIrYssThQo", base_url="https://api.moonshot.cn/v1")
+doubao_client = Ark(api_key="196b33be-8abb-4af3-9fba-6e266b2dd942")
+mistral_client = Mistral(api_key="zWUDyBGqEIdJAtJoxnsr6ACcLTgz1auH")
 
 TITLE_FONT = "XNKZPT+FZLTZHK--GBK1-0"
 TITLE_SIZE = 14
@@ -34,20 +43,111 @@ def call_deepseek_api(question):
     :return: API 返回的答案
     """
     try:
-        response = client.chat.completions.create(
-            model="deepseek-chat",
+        response = deepseek_client.chat.completions.create(
+            model="deepseek-reasoner",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": question},
             ],
+            temperature=args.temperature,
             stream=False
         )
         return response.choices[0].message.content
     except Exception as e:
         print(f"调用 DeepSeek API 时出错: {e}")
         return "API 调用失败"
+   
+def call_gpt_api(question):
+    """
+    调用 gpt API 并获取答案。
+    :param question: 需要发送到 API 的完整问题
+    :return: API 返回的答案
+    """
+    os.environ["HTTP_PROXY"] = "http://localhost:7890"
+    os.environ["HTTPS_PROXY"] = "http://localhost:7890"
+    try:
+        openai.api_key = os.getenv("OPENAI_API_KEY")
+        response = openai.chat.completions.create(
+            model="gpt-4.5-preview",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": question},
+            ],
+            temperature=args.temperature,
+            stream=False
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"调用 gpt API 时出错: {e}")
+        return "API 调用失败" 
+
+def call_kimi_api(question):
+    """
+    调用 Kimi API 并获取答案。
+    :param question: 需要发送到 API 的完整问题
+    :return: API 返回的答案
+    """
+    try:
+        response = kimi_client.chat.completions.create(
+            model="moonshot-v1-8k",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": question},
+            ],
+            temperature=args.temperature,
+            stream=False
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"调用 Kimi API 时出错: {e}")
+        return "API 调用失败"
     
-def gen_multi_sentence(knowledge_point, sql_file):
+def call_doubao_api(question):
+    """
+    调用 豆包 API 并获取答案。
+    :param question: 需要发送到 API 的完整问题
+    :return: API 返回的答案
+    """
+    try:
+        response = doubao_client.chat.completions.create(
+            model="doubao-1.5-pro-32k-250115",
+            # model="doubao-1.5-thinking-pro-250415",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": question},
+            ],
+            temperature=args.temperature,
+            stream=False
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"调用 豆包 API 时出错: {e}")
+        return "API 调用失败"
+    
+
+def call_mistral_api(question):
+    """
+    调用 Mistral API 并获取答案。
+    :param question: 需要发送到 API 的完整问题
+    :return: API 返回的答案
+    """
+    try:
+        response = mistral_client.chat.complete(
+            model="mistral-large-2407",
+            # model="mistral-medium-latest",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": question},
+            ],
+            temperature=args.temperature,
+            stream=False
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"调用 Mistral API 时出错: {e}")
+        return "API 调用失败"
+    
+def gen_multi_sentence(knowledge_point, sql_file, api_name="deepseek", temperature=0.5):
     chapter_index = knowledge_point['chaptor_index']
     section_index = knowledge_point['section_index']
     kp_index = knowledge_point['kp_index']
@@ -56,9 +156,62 @@ def gen_multi_sentence(knowledge_point, sql_file):
     
     full_text = '\n'.join(knowledge_point['options'])
         
-    prompt = "对于下面的文本，每一行是一个句子，有的句子表达的意思是完整的，有的句子是不完整的，需要和它前面或后面的一个或多个句子连接在一起，才能表达完整的意思。比如一个句子中有“例如”、“这表明”、“再如”、“可见”、“因此”等关键词，则大概率要和前面的句子连接到一起。有的句子语法有问题、逻辑怪异，比如，“第一章分子动理论3家用扫描隧道显微镜拍摄的石墨表面的原子”，这种句子直接跳过不考虑。请帮我整理文本，连接相邻的句子成一个段落，以表达完整意思。段落要描述物理学中的规律或事实，比如“下面我们做一个类似的实验。”就不属于描述物理规律和事实。连续的句子只要能表达完整意思就划分为段落，段落里包含的句子尽可能少。每一完整段落前面加上从“1. ”开始的序号。文本如下：\n"
+    prompt = """任务描述：
+            从提供的文本中提取适合用作物理学科选择题的条目。每个条目应该是一个完整且独立的物理学事实或规律。请遵循以下详细指导：
+            1. 句子的完整性：
+            如果一个句子能够独立表达完整的意思，则单独作为一个条目。
+            如果一个句子指代前文或者和前文有因果关系，包含“例如”、“这”、“再如”、“可见”、“因此”等关键词，特别是以这些词开头，则需要与前面的句子结合为一个条目，以表达完整意思，或者直接跳过该句子。
+            2. 跳过无关内容：
+            忽略与物理规律或事实无关的句子，例如那些仅描述操作步骤的句子（如“下面我们做一个类似的实验”）。
+            3. 跳过错误内容：
+            忽略本身有问题的句子，例如“第一章分子动理论3家用扫描隧道显微镜拍摄的石墨表面的原子”。
+            4. 跳过未知变量：
+            跳过包含变量的句子，例如“当r＝r0时，分子间的作用力F为0，这个位置称为平衡位置。”，只要遇到变量就跳过该句子。   
+            5. 条目的编号：
+            每个合格的条目前应添加序号，从“1. ”开始。
+
+            示例：
+            针对下面双引号中的文本：
+            “ 我们知道，1mol水中含有水分子的数量就达6.02×1023个。
+            ②这足以表明，组成物体的分子是大量的。
+            人们用肉眼无法直接看到分子，就是用高倍的光学显微镜也看不到。
+            直至1982年，人们研制了能放大几亿倍的扫描隧道显微镜③，才观察到物质表面原子的排列。
+            第一章分子动理论3家用扫描隧道显微镜拍摄的石墨表面的原子，图中每个亮斑都是一个碳原子。
+            从许多实验和生活现象中我们都会发现，不同种物质能够彼此进入对方。
+            在物理学中，人们把这类现象叫作扩散（diffusion）。
+            扩散现象并不是外界作用（例如对流、重力作用等）引起的，也不是化学反应的结果，而是由物质分子的无规则运动产生的。
+            扩散现象是物质分子永不停息地做无规则运动的证据之一。
+            扩散现象在科学技术中有很多应用。
+            例如，在生产半导体器件时，需要在纯净半导体材料中掺入其他元素。
+            这一过程可以在高温条件下通过分子的扩散来完成。
+            19世纪初，一些人观察到，悬浮在液体中的小颗粒总在不停地运动。
+            1827年，英国植物学家布朗首先在显微镜下研究了这种运动。
+            下面我们做一个类似的实验。”
+            应该整理成下面的形式：
+            1. 我们知道，1mol水中含有水分子的数量就达6.02×1023个。这足以表明，组成物体的分子是大量的。
+            2. 人们用肉眼无法直接看到分子，就是用高倍的光学显微镜也看不到。直至1982年，人们研制了能放大几亿倍的扫描隧道显微镜，才观察到物质表面原子的排列。
+            3. 从许多实验和生活现象中我们都会发现，不同种物质能够彼此进入对方。在物理学中，人们把这类现象叫作扩散（diffusion）。
+            4. 扩散现象并不是外界作用（例如对流、重力作用等）引起的，也不是化学反应的结果，而是由物质分子的无规则运动产生的。
+            5. 扩散现象是物质分子永不停息地做无规则运动的证据之一。
+            6. 扩散现象在科学技术中有很多应用。例如，在生产半导体器件时，需要在纯净半导体材料中掺入其他元素。这一过程
+            可以在高温条件下通过分子的扩散来完成。
+            7. 19世纪初，一些人观察到，悬浮在液体中的小颗粒总在不停地运动。1827年，英国植物学家布朗首先在显微镜下研究了这种运动。
+
+            根据任务描述和示例，整理下面文本，只输出整理好的文本即可：
+            """
     send_text = prompt + full_text
-    response = call_deepseek_api(send_text)
+    
+    if args.api == "deepseek":
+        response = call_deepseek_api(send_text)
+    elif args.api == "gpt":
+        response = call_gpt_api(send_text)
+    elif args.api == "kimi":
+        response = call_kimi_api(send_text)
+    elif args.api == "doubao":
+        response = call_doubao_api(send_text)
+    elif args.api == "mistral":
+        response = call_mistral_api(send_text)
+        
     print("response is: "+response)
     # 使用正则表达式匹配并去除编号
     result_lines = []
@@ -109,17 +262,13 @@ def calculate_font_proportion(sentence):
     return matching_count / len(sentence)
 
 def check_sentence(sentence_text):
-    if "，" in sentence_text:  # 中文逗号
-        first_comma_index = sentence_text.index("，")
-        if first_comma_index == 1:  # 第一个逗号前只有一个字符（下标为1表示只有一个字）
-            return False  # 排除该句子
-        
-    if len(sentence_text) < 10:
-        return False
-    
     # 检查关键词过滤条件
-    if not re.search(r"图|编写|册|索引|下表|表格|表1|表2|表3|？", sentence_text):
-        return True
+    if re.search(r"图|编写|册|索引|下表|表格|表1|表2|表3|？", sentence_text):
+        return False
+    # 检查是否以问号结尾
+    if sentence_text.strip().endswith("？") or sentence_text.strip().endswith("！"):
+        return False
+    return True
     
 def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
     """
@@ -223,6 +372,8 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                     # 插入节信息到 SQL文件
                     section_id = f"010106{str(chapter_index+1).zfill(2)}{str(section_index+1).zfill(2)}0000"
                     section_code = f"{chapter_code}.SEC{str(section_index+1).zfill(2)}"
+                    if section['title'].strip().startswith("实验："):
+                        continue
                     sql_file.write(
                         f"('{section_id}', 'PHYSICS', 'SENIOR', 'TERM_6', "
                         f"'{section_code}', '{section['title']}', '', '{chapter_id}'),\n"
@@ -239,7 +390,6 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
 
                     # print(f"\n解析小节: {section['title']} (起始页: {start_page}, 结束页: {end_page})")
                     
-                    knowledge_points = []
                     current_knowledge_point = None
                     kp_index = 0
                     for page_number in range(start_page, end_page + 1):
@@ -259,7 +409,6 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                             if char.get("fontname") == TITLE_FONT and round(char.get("size")) == 14 and char.get("text") != "问" and char.get("text") != "题" and char.get("text").strip() != "":
                                 # 如果当前有未结束的知识点标题，保存到知识点列表
                                 if current_knowledge_point:
-                                    knowledge_points.append(current_knowledge_point)
                                     gen_multi_sentence(current_knowledge_point, sql_file)
 
                                 # 开始扫描完整的知识点标题
@@ -295,7 +444,6 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                 }
                                 
                                 kp_index += 1  # 更新知识点索引
-                                op_index = 0  # 重置题目索引
                                 
                                 # 更新外层循环的索引，跳过已扫描的字符
                                 char_index = last_scanned_index
@@ -394,8 +542,8 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                                         print("length of sentence is: "+str(len(sentence_text)))
                                         save_text(current_sentence)  # 保存当前句子到文件
                                         
-                                        # if check_sentence(sentence_text):
-                                        current_knowledge_point["options"].append(sentence_text)  # 添加到知识点选项列表
+                                        if check_sentence(sentence_text):
+                                            current_knowledge_point["options"].append(sentence_text)  # 添加到知识点选项列表
                                         
                                     current_sentence = []
                                 space = False  # 重置空格标志
@@ -403,12 +551,20 @@ def extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path):
                             char_index += 1
                         # 添加最后一个章节（如果有）
                     if current_knowledge_point:
-                        knowledge_points.append(current_knowledge_point)
                         gen_multi_sentence(current_knowledge_point, sql_file)
                         
-                    print(knowledge_points)
 
-# 示例用法
-pdf_path = "senior_physics_textbooks/senior_optional_3.pdf"  # 替换为你的 PDF 文件路径
-output_sql_path = "sql/phy_senior.sql"
-extract_catalog_and_chapters_with_pages(pdf_path, output_sql_path)
+# 添加命令行参数解析
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="解析 PDF 文件并生成 SQL")
+    parser.add_argument("--input", default="senior_physics_textbooks/senior_optional_3.pdf", help="输入 PDF 文件路径")
+    parser.add_argument("--output", default="sql/phy_senior.sql", help="输出 SQL 文件路径")
+    parser.add_argument("--api", default="deepseek", choices=["deepseek", "gpt", "kimi", "doubao", "mistral"], help="调用的 API 类型")
+    parser.add_argument("--temperature", type=float, default=1.0, help="生成内容的随机性（默认值为 0.5）")
+    args = parser.parse_args()
+
+    # 调用主函数
+    extract_catalog_and_chapters_with_pages(
+        pdf_path=args.input,
+        output_sql_path=args.output
+    )
