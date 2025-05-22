@@ -8,7 +8,6 @@ from openai import OpenAI
 from mistralai import Mistral
 from volcenginesdkarkruntime import Ark
 
-
 # 配置 DeepSeek API 客户端
 deepseek_client = OpenAI(api_key="sk-09da13b2c97948628523d042d6a02f06", base_url="https://api.deepseek.com")
 kimi_client = OpenAI(api_key="sk-ODuizMlUC22phanBhvYz6dBjx2yrz7vhKhcjKnoIrYssThQo", base_url="https://api.moonshot.cn/v1")
@@ -44,7 +43,7 @@ def call_deepseek_api(question):
     """
     try:
         response = deepseek_client.chat.completions.create(
-            model="deepseek-reasoner",
+            model="deepseek-chat",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": question},
@@ -68,7 +67,7 @@ def call_gpt_api(question):
     try:
         openai.api_key = os.getenv("OPENAI_API_KEY")
         response = openai.chat.completions.create(
-            model="gpt-4.5-preview",
+            model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": question},
@@ -157,18 +156,18 @@ def gen_multi_sentence(knowledge_point, sql_file, api_name="deepseek", temperatu
     full_text = '\n'.join(knowledge_point['options'])
         
     prompt = """任务描述：
-            从提供的文本中提取适合用作物理学科选择题的条目。每个条目应该是一个完整且独立的物理学事实或规律。请遵循以下详细指导：
-            1. 句子的完整性：
-            如果一个句子能够独立表达完整的意思，则单独作为一个条目。
-            如果一个句子指代前文或者和前文有因果关系，包含“例如”、“这”、“再如”、“可见”、“因此”等关键词，特别是以这些词开头，则需要与前面的句子结合为一个条目，以表达完整意思，或者直接跳过该句子。
-            2. 跳过无关内容：
-            忽略与物理规律或事实无关的句子，例如那些仅描述操作步骤的句子（如“下面我们做一个类似的实验”）。
-            3. 跳过错误内容：
-            忽略本身有问题的句子，例如“第一章分子动理论3家用扫描隧道显微镜拍摄的石墨表面的原子”。
-            4. 跳过未知变量：
-            跳过包含变量的句子，例如“当r＝r0时，分子间的作用力F为0，这个位置称为平衡位置。”，只要遇到变量就跳过该句子。   
-            5. 条目的编号：
-            每个合格的条目前应添加序号，从“1. ”开始。
+            从提供的文本中提取适合用作物理学科选择题的条目。每个条目应该是一个完整且独立的物理学事实或规律。请严格按照以下步骤处理文本：
+            第1步：跳过无关内容：
+            遍历所有句子，忽略与物理规律或事实无关的句子，例如那些仅描述操作步骤的句子（如“下面我们做一个类似的实验”）。
+            第2步：跳过错误内容：
+            再次遍历所有句子，忽略本身有问题的句子，例如“第一章分子动理论3家用扫描隧道显微镜拍摄的石墨表面的原子”。
+            第3步：跳过未知变量：
+            再次遍历所有句子，跳过包含变量的句子，例如“当r＝r0时，分子间的作用力F为0，这个位置称为平衡位置。”，只要遇到变量就跳过该句子。   
+            第4步：句子的完整性：
+            再次遍历所有句子，如果一个句子能够独立表达完整的意思，则单独作为一个条目。
+            如果一个句子指代前文或者和前文有因果关系，包含“例如”、“这”、“再如”、“可见”、“因此”等关键词，特别是以这些词开头，则需要与前面的句子结合为一个条目，以表达完整意思。例如“观察布朗运动，温度越高，悬浮微粒的运动就越明显。”和“可见，分子的无规则运动与温度有关系，温度越高，这种运动越剧烈。”应该合并到一个条目。
+            第5步：条目的编号：
+            给每个合格的条目前应添加序号，从“1. ”开始。
 
             示例：
             针对下面双引号中的文本：
@@ -220,6 +219,10 @@ def gen_multi_sentence(knowledge_point, sql_file, api_name="deepseek", temperatu
         m = re.match(r'^(\d+)\.\s+(.*)', line)
         if m:
             content = m.group(2)
+            if content.startswith("他"):
+                continue
+            if re.search(r"栏目", content):
+                continue
             result_lines.append(content)
 
     for op_index, sentence_text in enumerate(result_lines):
@@ -264,6 +267,8 @@ def calculate_font_proportion(sentence):
 def check_sentence(sentence_text):
     # 检查关键词过滤条件
     if re.search(r"图|编写|册|索引|下表|表格|表1|表2|表3|？", sentence_text):
+        return False
+    if re.search(r"\（\d+\）", sentence_text):
         return False
     # 检查是否以问号结尾
     if sentence_text.strip().endswith("？") or sentence_text.strip().endswith("！"):

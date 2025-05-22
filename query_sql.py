@@ -1,6 +1,7 @@
 import mysql.connector
 import random
 import openai
+import json
 from openai import OpenAI
 
 
@@ -46,8 +47,8 @@ def generate_questions(deep_nodes, query_name):
     all_incorrect_descriptions = []  # 存储所有错误描述
 
     # 题目总数设定
-    correct_all = 15
-    incorrect_all = 15
+    correct_all = 230
+    incorrect_all = 230
     
     # 当前需要生成的题目数
     if round(len(deep_nodes) * 0.5) < correct_all:
@@ -65,7 +66,9 @@ def generate_questions(deep_nodes, query_name):
     incorrect_need = incorrect_all - incorrect_now
     
     # 在 deep_nodes 中随机选出 correct_now 个节点
-    correct_nodes = random.sample(deep_nodes, correct_now)
+    # correct_nodes = deep_nodes[-correct_now:]  
+    correct_nodes = deep_nodes[:correct_now]  
+    # correct_nodes = random.sample(deep_nodes, correct_now)
     
     remain_nodes = [node for node in deep_nodes if node not in correct_nodes]
     incorrect_nodes = random.sample(remain_nodes, incorrect_now)
@@ -74,9 +77,14 @@ def generate_questions(deep_nodes, query_name):
     print(f"已有正确陈述数量：{len(correct_nodes)}")
     for node in correct_nodes:
         print(f"正在处理正确节点：{node}")
+        if node.startswith("他"):
+            continue
         prompt_correct = (
-            f"把下面这个和物理学有关的描述换个说法，表达相同的意思，只回复转换后的句子：\n{node}"
-        )
+            f"""判断下面的描述语义是否完整，比如“后人把悬浮微粒的这种无规则运动叫作布朗运动”语义不完整，因为“这种”不知道指代的是什么。“他的目的是：测量金属的遏止电压Uc与入射光的波长λ”语义不完整，因为不知道“他”指的是谁。“因此，我们把分子这种永不停息的无规则运动叫作热运动”语义不完整，因为不知道原因。
+            如果描述语义不完整，则放弃转换该句子并生成一个和{query_name}有关且正确的陈述句。
+            如果描述语义完整，则在其基础上变换。要求变换后的描述语义完整，可以作为一个物理学科选择题的选项。
+            只回复转换或生成的句子：\n{node}"""
+            )
 
         # 调用 DeepSeek API
         response = call_deepseek_api(prompt_correct)
@@ -89,8 +97,13 @@ def generate_questions(deep_nodes, query_name):
     print(f"已有错误陈述数量：{len(incorrect_nodes)}")
     for node in incorrect_nodes:
         print(f"正在处理错误节点：{node}")
+        if node.startswith("他"):
+            continue
         prompt_incorrect = (
-            f"把下面这个和物理学有关的描述做微小的改变，使其成为一句错误的描述，不符合物理学规律，只回复转换后的句子：\n{node}"
+            f"""判断下面的描述语义是否完整，比如“后人把悬浮微粒的这种无规则运动叫作布朗运动”语义不完整，因为“这种”不知道指代的是什么。“他的目的是：测量金属的遏止电压Uc与入射光的波长λ”语义不完整，因为不知道“他”指的是谁。“因此，我们把分子这种永不停息的无规则运动叫作热运动”语义不完整，因为不知道原因。
+            如果描述语义不完整，则放弃转换该句子并生成一个和{query_name}有关但错误的陈述句。
+            如果描述语义完整，则在其基础上变换，使其成为错误的描述，不符合物理学规律。要求变换后的描述语义完整，可以作为一个物理学科选择题的选项。
+            只回复转换或生成的句子：\n{node}"""
         )
 
         # 调用 DeepSeek API
@@ -139,7 +152,7 @@ def generate_questions(deep_nodes, query_name):
 
     # 随机生成 10 道题目
     questions = []
-    for i in range(10):
+    for i in range(120):
         if i%2 == 0:
             # 随机选择 3 个正确选项
             selected_correct = random.sample(all_correct_descriptions, 3)
@@ -155,17 +168,16 @@ def generate_questions(deep_nodes, query_name):
             incorrect_index = options.index(selected_incorrect)
             answer = chr(65 + incorrect_index)  # 计算正确答案的字母选项（A, B, C, D）
 
-            # 组装题目
-            question = (
-                "下面的说法错误的是：\n"
-                f"A. {options[0]}\n"
-                f"B. {options[1]}\n"
-                f"C. {options[2]}\n"
-                f"D. {options[3]}\n"
-                f"答案：{answer}"
-            )
-            questions.append(question)
-            print(f"生成的题目：\n{question}")
+            # 组装题目为 JSON 格式
+            question_json = {
+                "question": "下面的说法错误的是：",
+                "A": options[0],
+                "B": options[1],
+                "C": options[2],
+                "D": options[3],
+                "answer": answer
+            }
+            questions.append(question_json)
         else:
             # 随机选择 1 个正确选项
             selected_correct = random.choice(all_correct_descriptions)
@@ -180,18 +192,19 @@ def generate_questions(deep_nodes, query_name):
             # 确定正确选项的位置（索引）
             correct_index = options.index(selected_correct)
             answer = chr(65 + correct_index)
-            # 组装题目
-            question = (
-                "下面的说法正确的是：\n"
-                f"A. {options[0]}\n"
-                f"B. {options[1]}\n"
-                f"C. {options[2]}\n"
-                f"D. {options[3]}\n"
-                f"答案：{answer}"
-            )
-            print(f"生成的题目：\n{question}")
-            questions.append(question)
-    return questions
+            # 组装题目为 JSON 格式
+            question_json = {
+                "question": "下面的说法正确的是：",
+                "A": options[0],
+                "B": options[1],
+                "C": options[2],
+                "D": options[3],
+                "answer": answer
+            }
+            questions.append(question_json)
+    # 存储题目到 JSON 文件
+    with open('questions.json', 'w', encoding='utf-8') as file:
+        json.dump(questions, file, ensure_ascii=False, indent=4)
 
 def connect_db():
     """连接数据库"""

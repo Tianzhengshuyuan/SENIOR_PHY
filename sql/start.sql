@@ -10,7 +10,7 @@ CREATE TABLE knowledge_point (
     category1_code VARCHAR(20),
     category2_code VARCHAR(20),
     code VARCHAR(50),
-    name VARCHAR(200),
+    name VARCHAR(500),
     description VARCHAR(200),
     parent_id VARCHAR(20)
 );
