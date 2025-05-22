@@ -12,3 +12,9 @@ sudo mysql < sql/phy_senior.sql
 ```bash
 python query_sql.py 
 ``` 
+
+4. 检查每个字的字体和大小
+```bash
+python check_fonts.py --input=senior_chemistry_textbooks/senior_optional_3.pdf  > log/fonts.log
+```
+
